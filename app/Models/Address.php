@@ -6,17 +6,18 @@ use Backpack\CRUD\app\Models\Traits\CrudTrait;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class Book extends Model
+class Address extends Model
 {
     use CrudTrait;
     use HasFactory;
 
     protected $fillable = [
-        'title',
-        'description',
-        'isbn',
-        'year_of_publication',
-        'image_path',
-        'author',
+        'zip_code',
+        'street',
+        'complement',
+        'unit',
+        'neighborhood',
+        'city',
+        'state',
     ];
 }

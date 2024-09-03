@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+    app:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        container_name: laravel_app
+        working_dir: /var/www
+        volumes:
+            - .:/var/www
+        networks:
+            - laravel
+        env_file:
+            - .env
+        depends_on:
+            db:
+                condition: service_healthy
+            minio-create-bucket:
+                condition: service_started
+        healthcheck:
+            test: [ "CMD", "php", "artisan", "healthcheck" ]
+            interval: 30s
+            retries: 3
+            start_period: 10s
+            timeout: 10s
+        entrypoint: ./docker-entrypoint.sh
+        command: "php-fpm"
+
+    nginx:
+        image: nginx:latest
+        container_name: nginx_server
+        ports:
+            - "8080:80"
+        volumes:
+            - .:/var/www
+            - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+        depends_on:
+            - app
+        networks:
+            - laravel
+
+    db:
+        image: postgres:latest
+        container_name: postgres_db
+        environment:
+            POSTGRES_USER: ${DB_USERNAME}
+            POSTGRES_PASSWORD: ${DB_PASSWORD}
+            POSTGRES_DB: ${DB_DATABASE}
+        volumes:
+            - pgdata:/var/lib/postgresql/data
+        networks:
+            - laravel
+        ports:
+            - "5432:5432"
+        healthcheck:
+            test: [ "CMD-SHELL", "pg_isready -U ${DB_USERNAME}" ]
+            interval: 5s
+            retries: 5
+            start_period: 10s
+            timeout: 10s
+
+    adminer:
+        image: adminer:latest
+        container_name: adminer
+        ports:
+            - "8081:8080"
+        networks:
+            - laravel
+
+    minio-create-bucket:
+        image: minio/mc
+        restart: "no"
+        depends_on:
+            minio:
+                condition: service_healthy
+        environment:
+            AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+            AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+            AWS_BUCKET: ${AWS_BUCKET}
+            AWS_ENDPOINT: ${AWS_ENDPOINT}
+        volumes:
+            - './minio:/etc/minio'
+        networks:
+            - laravel
+        entrypoint: /etc/minio/create_bucket.sh
+
+    minio:
+        image: minio/minio:latest
+        ports:
+            - "9000:9000"
+            - "9099:9099"
+        environment:
+            MINIO_ROOT_USER: root
+            MINIO_ROOT_PASSWORD: password
+        command: server --address ":9099" --console-address ":9000" /data
+        volumes:
+            - 'minio:/data'
+        restart: "always"
+        networks:
+            - laravel
+        healthcheck:
+            test: ["CMD", "mc", "ready", "play"]
+            interval: 10s
+            retries: 5
+            start_period: 6s
+            timeout: 10s
+
+networks:
+    laravel:
+        driver: bridge
+
+volumes:
+    pgdata:
+    minio:
